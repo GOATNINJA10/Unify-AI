@@ -33,9 +33,9 @@ interface HealthStatus {
 // Helper: Convert LaTeX delimiters for remark-math compatibility
 function convertLatexDelimiters(text: string): string {
   // Convert \( ... \) to $...$
-  text = text.replace(/\\\((.+?)\\\)/gs, (_, expr) => `$${expr}$`)
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => `$${expr}$`)
   // Convert \[ ... \] to $$...$$
-  text = text.replace(/\\\[(.+?)\\\]/gs, (_, expr) => `$$${expr}$$`)
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => `$$${expr}$$`)
   // Convert all $$...$$ (inline) to $...$ if not already block math
   // This is optional and depends on your AI output style
   // You may skip this if your AI uses $...$ for inline and $$...$$ for block
