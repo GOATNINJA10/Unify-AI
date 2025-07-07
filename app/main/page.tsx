@@ -1,8 +1,14 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import "katex/dist/katex.min.css"
+
 import { Button } from "@/components/ui/button"
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { Paperclip, ArrowUp, Zap, Globe, Repeat } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -24,6 +30,18 @@ interface HealthStatus {
   }
 }
 
+// Helper: Convert LaTeX delimiters for remark-math compatibility
+function convertLatexDelimiters(text: string): string {
+  // Convert \( ... \) to $...$
+  text = text.replace(/\\\((.+?)\\\)/gs, (_, expr) => `$${expr}$`)
+  // Convert \[ ... \] to $$...$$
+  text = text.replace(/\\\[(.+?)\\\]/gs, (_, expr) => `$$${expr}$$`)
+  // Convert all $$...$$ (inline) to $...$ if not already block math
+  // This is optional and depends on your AI output style
+  // You may skip this if your AI uses $...$ for inline and $$...$$ for block
+  return text
+}
+
 export default function DeepSeekChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -34,6 +52,7 @@ export default function DeepSeekChat() {
   const { toast } = useToast()
   const messageIdRef = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     checkSystemHealth()
@@ -53,8 +72,6 @@ export default function DeepSeekChat() {
       const response = await fetch("/api/health")
       const data = await response.json()
       setHealthStatus(data)
-
-      // Only show error toast for critical errors
       if (data.status === "error") {
         toast({
           title: "System Warning",
@@ -63,8 +80,6 @@ export default function DeepSeekChat() {
         })
       }
     } catch (error) {
-      console.error("Health check failed:", error)
-      // Don't block the UI if health check fails
       setHealthStatus({
         status: "warning",
         message: "Health check failed, but you can still try to use the chat",
@@ -86,7 +101,6 @@ export default function DeepSeekChat() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const message = input.trim()
-    
     if (!message) {
       toast({
         title: "Validation Error",
@@ -95,8 +109,6 @@ export default function DeepSeekChat() {
       })
       return
     }
-    
-    // Only block submission if there's a critical error
     if (healthStatus?.status === "error") {
       toast({
         title: "System Error",
@@ -105,11 +117,7 @@ export default function DeepSeekChat() {
       })
       return
     }
-    
-    // Clear input immediately for better UX
     setInput("")
-    
-    // Add user message to chat
     const userMessage: Message = {
       id: messageIdRef.current++,
       model: "user",
@@ -128,8 +136,15 @@ export default function DeepSeekChat() {
       })
 
       if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(errorText || "Failed to get AI response")
+        let errorMsg = "Failed to get AI response"
+        try {
+          const errorData = await res.json()
+          errorMsg = errorData?.error || errorMsg
+        } catch {
+          const errorText = await res.text()
+          if (errorText) errorMsg = errorText
+        }
+        throw new Error(errorMsg)
       }
 
       const data = await res.json()
@@ -147,7 +162,6 @@ export default function DeepSeekChat() {
         description: "Response received",
       })
     } catch (error) {
-      console.error("Error fetching AI response:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to get AI response",
@@ -155,6 +169,7 @@ export default function DeepSeekChat() {
       })
     } finally {
       setIsLoading(false)
+      inputRef.current?.focus()
     }
   }
 
@@ -165,25 +180,21 @@ export default function DeepSeekChat() {
       case "deepseek":
       case "deepseek-r1":
         return <Globe className="h-4 w-4" />
+      case "chained":
+        return <Globe className="h-4 w-4" />
       default:
         return null
     }
   }
 
-  // Helper function to parse text and render **bold** parts
-  const parseBoldText = (text: string): React.ReactNode[] => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/)
-    return parts.map((part, index) => {
-      if (part.startsWith("**") && part.endsWith("**")) {
-        const boldText = part.slice(2, -2)
-        return (
-          <strong key={index} className="font-bold">
-            {boldText}
-          </strong>
-        )
-      }
-      return <React.Fragment key={index}>{part}</React.Fragment>
-    })
+  const getModelName = (model: string) => {
+    switch (model) {
+      case "scira": return "Scira"
+      case "deepseek":
+      case "deepseek-r1": return "DeepSeek R1"
+      case "chained": return "Chained"
+      default: return model
+    }
   }
 
   return (
@@ -210,9 +221,16 @@ export default function DeepSeekChat() {
               >
                 <div className="flex items-center mb-2 gap-2">
                   {!msg.isUser && getModelIcon(msg.model)}
-                  <span className="font-semibold">{msg.isUser ? "You" : msg.model.toUpperCase()}</span>
+                  <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
                 </div>
-                <p className="whitespace-pre-wrap">{parseBoldText(msg.text)}</p>
+                <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {convertLatexDelimiters(msg.text)}
+                  </ReactMarkdown>
+                </div>
               </div>
             ))}
             <div ref={messagesEndRef} />
@@ -222,6 +240,7 @@ export default function DeepSeekChat() {
         <form onSubmit={handleSubmit} className="relative w-full max-w-2xl">
           <div className="relative bg-gray-800 rounded-lg px-6 py-6 mb-2">
             <textarea
+              ref={inputRef}
               placeholder="Message DeepSeek"
               className="w-full bg-transparent border-none outline-none text-white placeholder-gray-400 text-lg resize-none overflow-hidden pr-32 pb-10 whitespace-normal break-normal"
               value={input}
@@ -232,19 +251,14 @@ export default function DeepSeekChat() {
                   handleSubmit(e)
                 }
               }}
-              onKeyPress={(e) => {
-                // Prevent form submission on Enter key
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                }
-              }}
               disabled={isLoading}
               rows={1}
               style={{ minHeight: '1rem' }}
+              aria-label="Message input"
               onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
                 const target = e.currentTarget
                 target.style.height = 'auto'
-                const newHeight = Math.min(target.scrollHeight, 200) // Limit max height
+                const newHeight = Math.min(target.scrollHeight, 200)
                 target.style.height = `${newHeight}px`
                 target.style.overflowY = newHeight >= 200 ? 'auto' : 'hidden'
               }}
@@ -254,20 +268,14 @@ export default function DeepSeekChat() {
               onChange={(e) => setSelectedModel(e.target.value as "chained" | "scira" | "deepseek")}
               className="absolute bottom-4 left-4 bg-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
               title="Select Model"
+              aria-label="Model selection"
+              disabled={isLoading}
             >
               <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
               <option value="scira">Scira Only</option>
               <option value="deepseek">DeepSeek R1 Only</option>
             </select>
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
-              {/* <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-gray-400 hover:text-gray-200" aria-label="Attach file">
-                    <Paperclip className="h-5 w-5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Attach file</TooltipContent>
-              </Tooltip> */}
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}

@@ -1,137 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { chromium } from "playwright"
 
-// Helper function to format the response in clean markdown
-function formatResponse(response: string): string {
-  // Clean up any markdown formatting issues
-  let formatted = response
-    // Remove reference numbers like "1\n" or "2\n" at the start of lines
-    .replace(/^\s*\d+\s*\n/gm, '\n')
-    // Remove citation markers like [1] or [2]
-    .replace(/\s*\[\d+\]\s*/g, '')
-    // Clean up extra spaces before newlines
-    .replace(/\s+\n/g, '\n')
-    // Fix common markdown table formatting issues
-    .replace(/\|\s*\n\s*\|/g, '|\n|')
-    // Limit consecutive newlines to 2
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+import { remark } from "remark";
+import remarkParse from "remark-parse";
+import remarkStringify from "remark-stringify";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 
-  // Fix markdown tables by ensuring proper alignment rows
-  if (formatted.includes('|') && formatted.includes('---')) {
-    const lines = formatted.split('\n');
-    let inTable = false;
-    const fixedLines: string[] = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Check if this is a table header or separator
-      if (line.trim().startsWith('|') && line.includes('---')) {
-        inTable = true;
-        // Ensure the separator line has the correct number of columns
-        const headerLine = lines[i-1];
-        const columnCount = (headerLine.match(/\|/g) || []).length - 1;
-        const separator = '|' + ' --- |'.repeat(columnCount);
-        fixedLines.push(separator);
-        continue;
-      } else if (inTable && line.trim() === '') {
-        // End of table
-        inTable = false;
-        fixedLines.push('');
-      }
-      
-      // Clean up table rows
-      if (inTable) {
-        // Ensure proper spacing around | characters
-        const cleanLine = line
-          .replace(/\s*\|\s*/g, ' | ')
-          .replace(/^\s*\|/, '|')
-          .replace(/\|\s*$/, '|')
-          .replace(/\s+/g, ' ')
-          .trim();
-        fixedLines.push(cleanLine);
-      } else {
-        fixedLines.push(line);
-      }
-    }
-    
-    formatted = fixedLines.join('\n');
-  }
+/**
+ * Formats markdown, cleans up references/citations, and supports LaTeX math.
+ * @param response Raw markdown string (may include LaTeX formulas)
+ * @returns Cleaned and formatted markdown string
+ */
+export async function formatResponse(response: string): Promise<string> {
+  // Remove reference numbers at line starts (e.g., "1\n", "2\n")
+  let cleaned = response.replace(/^\s*\d+\s*\n/gm, "\n");
+  // Remove citation markers like [1], [2]
+  cleaned = cleaned.replace(/\s*\[\d+\]\s*/g, "");
+  // Clean up extra spaces before newlines
+  cleaned = cleaned.replace(/\s+\n/g, "\n");
+  // Limit consecutive newlines to 2
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
-  // Try to detect if the response contains a table or structured data
-  if (formatted.includes('|') && formatted.includes('-|-')) {
-    // If it already has markdown table formatting, leave it as is
-    return formatted;
-  }
+  // Process markdown with remark (GFM + math support)
+  const processed = await remark()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkStringify, {
+      bullet: "-",
+      fences: true,
+      listItemIndent: "one",
+      rule: "-",
+      strong: "*",
+      emphasis: "_"
+    })
+    .process(cleaned);
 
-  // Add basic markdown formatting for better readability
-  const lines = formatted.split('\n');
-  const formattedLines = [];
-  let inList = false;
-  let inTable = false;
-  let tableRows: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    // Skip empty lines at the beginning
-    if (formattedLines.length === 0 && !line) continue;
-    
-    // Handle bullet points
-    if (line.match(/^•\s+|^\d+\.\s+/)) {
-      if (!inList) {
-        inList = true;
-      }
-      formattedLines.push(line);
-      continue;
-    } else if (inList) {
-      inList = false;
-      formattedLines.push('');
-    }
-    
-    // Handle potential table data
-    if (line.includes(':')) {
-      const parts = line.split(':');
-      if (parts.length === 2 && parts[1].trim()) {
-        formattedLines.push(`**${parts[0].trim()}:** ${parts[1].trim()}`);
-        continue;
-      }
-    }
-    
-    // Add the line as is if no special formatting applies
-    if (line) {
-      formattedLines.push(line);
-    }
-  }
-
-  // Join lines with proper spacing
-  formatted = formattedLines.join('\n');
-
-  // Add markdown headers if the response is long enough
-  const lineCount = formatted.split('\n').length;
-  if (lineCount > 10 && !formatted.startsWith('#')) {
-    // Find the first line that could be a title (longest line in first 5 lines)
-    const firstLines = formatted.split('\n').slice(0, 5);
-    const titleLine = firstLines
-      .filter(line => !line.startsWith('|') && !line.includes('---'))
-      .reduce((longest, line) => {
-        const cleanLine = line.replace(/[#*_`~]/g, '').trim();
-        return cleanLine.length > longest.length ? cleanLine : longest;
-      }, '');
-    
-    if (titleLine.length > 10 && titleLine.length < 100) {
-      formatted = `# ${titleLine}\n\n${formatted.replace(titleLine, '').trim()}`;
-    }
-  }
-  
-  // Ensure proper spacing around headers and paragraphs
-  formatted = formatted
-    .replace(/(#+)([^\n])/g, '$1 $2')
-    .replace(/([^\n])\n([^\n])/g, '$1\n\n$2');
-
-  return formatted;
+  return String(processed).trim();
 }
+
 
 // Together AI API for DeepSeek R1
 async function callDeepSeekR1API(prompt: string): Promise<string> {
@@ -143,7 +51,7 @@ async function callDeepSeekR1API(prompt: string): Promise<string> {
       throw new Error("Together API key not found. Please set the TOGETHER_API_KEY environment variable.");
     }
 
-    const model = "deepseek-ai/deepseek-r1-distill-llama-70b";
+    const model = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free";
     const apiUrl = "https://api.together.xyz/v1/chat/completions";
     
     const response = await fetch(apiUrl, {
