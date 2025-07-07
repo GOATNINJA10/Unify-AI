@@ -1,0 +1,2 @@
+git add . && git commit -m "Integrate Playwright-based Scira API call in ai-chat route" && git pull --rebase origin main (to rebase local commits on top of remote changes)
+git push origin main (to push the updated local branch)
