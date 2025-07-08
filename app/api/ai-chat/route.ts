@@ -99,7 +99,7 @@ async function callDeepSeekR1API(prompt: string): Promise<string> {
       let completion = result.choices[0].message.content;
       
       // Remove content between <think> tags
-      completion = completion.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      completion = completion.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
       
       console.log("✅ Together AI DeepSeek R1 response received");
       return completion;
@@ -252,7 +252,7 @@ async function processChainedRequest(query: string) {
     const deepseekStart = Date.now()
     
     // Enhanced prompt for Together AI's DeepSeek R1
-    const systemPrompt = `You are DeepSeek R1, an advanced AI assistant. Your task is to summarize and refine the following response in a clear, concise manner.`
+    const systemPrompt = `You are DeepSeek R1, an advanced AI assistant. Your task is to refine the following response in a clear, concise manner.`
     
     const chainedPrompt = `## Original User Query
 ${query}
@@ -261,7 +261,7 @@ ${query}
 ${sciraResponse}
 
 ## Your Task
-Please provide a concise and well-structured summary that:
+Please provide a concise and well-structured  that:
 1. Captures the key points from the initial response
 2. Removes any redundancy or unnecessary details
 3. Maintains accuracy and preserves important information
@@ -333,6 +333,92 @@ async function processSingleModel(query: string, model: "scira" | "deepseek") {
   }
 }
 
+// New function to process meta-llama models similarly to deepseek
+async function processMetaLlamaModel(query: string, model: string) {
+  console.log("Processing meta-llama model request:", model, "for query:", query)
+
+  const startTime = Date.now()
+  let response: string
+
+  try {
+    const API_KEY = process.env.TOGETHER_API_KEY
+    if (!API_KEY) {
+      throw new Error("Together API key not found. Please set the TOGETHER_API_KEY environment variable.")
+    }
+
+    const apiUrl = "https://api.together.xyz/v1/chat/completions"
+
+    const apiResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: query,
+          },
+        ],
+        max_tokens: 1024,
+        temperature: 0.7,
+        top_p: 0.9,
+        stop: ["</s>"],
+      }),
+    })
+
+    if (!apiResponse.ok) {
+      let errorMessage = `HTTP ${apiResponse.status} - ${apiResponse.statusText}`
+      try {
+        const errorData = await apiResponse.text()
+        console.error("Together AI API error response:", errorData)
+        try {
+          const jsonError = JSON.parse(errorData)
+          errorMessage = jsonError.error?.message || jsonError.error || errorMessage
+        } catch (e) {
+          errorMessage = errorData || errorMessage
+        }
+      } catch (e) {
+        console.error("Error parsing error response:", e)
+      }
+      throw new Error(`Together AI API error: ${errorMessage}`)
+    }
+
+    const result = await apiResponse.json()
+
+    if (result.choices && result.choices.length > 0 && result.choices[0].message) {
+      let completion = result.choices[0].message.content
+
+      // Remove content between <think> tags
+      completion = completion.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
+
+      const processingTime = Date.now() - startTime
+      console.log("Meta-llama model processing completed in", processingTime, "ms")
+
+      return {
+        responses: [
+          {
+            model,
+            response: completion,
+            timestamp: Date.now(),
+            processingTime,
+          },
+        ],
+        finalOutput: completion,
+        totalTime: processingTime,
+      }
+    } else {
+      console.error("Unexpected response format:", result)
+      throw new Error("Unexpected response format from Together AI API")
+    }
+  } catch (error) {
+    console.error("Meta-llama model processing error:", error)
+    throw error
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log("API route called")
 
@@ -347,7 +433,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Query is required and must be a string" }, { status: 400 })
     }
 
-    if (!model || !["scira", "deepseek", "chained"].includes(model)) {
+    if (!model || !["scira", "deepseek", "chained", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", "meta-llama/Llama-Vision-Free"].includes(model)) {
       console.error("Invalid model:", model)
       return NextResponse.json({ error: "Valid model selection is required" }, { status: 400 })
     }
@@ -363,8 +449,11 @@ export async function POST(request: NextRequest) {
 
     if (model === "chained") {
       result = await processChainedRequest(query)
-    } else {
+    } else if (model === "scira" || model === "deepseek") {
       result = await processSingleModel(query, model as "scira" | "deepseek")
+    } else if (model === "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" || model === "meta-llama/Llama-Vision-Free") {
+      // For these models, call Together AI API with the model name directly
+      result = await processMetaLlamaModel(query, model)
     }
 
     console.log("Request processed successfully")
