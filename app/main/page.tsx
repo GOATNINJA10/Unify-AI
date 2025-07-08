@@ -45,7 +45,7 @@ function convertLatexDelimiters(text: string): string {
 export default function DeepSeekChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "chained">("chained")
+  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "chained" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free">("chained")
   const [isLoading, setIsLoading] = useState(false)
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
   const [isCheckingHealth, setIsCheckingHealth] = useState(true)
@@ -182,6 +182,9 @@ export default function DeepSeekChat() {
         return <Globe className="h-4 w-4" />
       case "chained":
         return <Globe className="h-4 w-4" />
+      case "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free":
+      case "meta-llama/Llama-Vision-Free":
+        return <Zap className="h-4 w-4" />
       default:
         return null
     }
@@ -193,6 +196,8 @@ export default function DeepSeekChat() {
       case "deepseek":
       case "deepseek-r1": return "DeepSeek R1"
       case "chained": return "Chained"
+      case "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free": return "Llama 3.3 70B Instruct Turbo"
+      case "meta-llama/Llama-Vision-Free": return "Llama Vision"
       default: return model
     }
   }
@@ -269,12 +274,14 @@ export default function DeepSeekChat() {
               className="absolute bottom-4 left-4 bg-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
               title="Select Model"
               aria-label="Model selection"
-              disabled={isLoading}
-            >
-              <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
-              <option value="scira">Scira Only</option>
-              <option value="deepseek">DeepSeek R1 Only</option>
-            </select>
+            disabled={isLoading}
+          >
+            <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
+            <option value="scira">Scira Only</option>
+            <option value="deepseek">DeepSeek R1 Only</option>
+            <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
+            <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+          </select>
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
               <button
                 type="submit"
