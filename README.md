@@ -1,225 +1,186 @@
-# Unified AI Interface - Scira & DeepSeek Integration
+# Unified AI Interface – Scira, DeepSeek R1 & Meta-LLaMA Integration
 
-A lightweight web-based interface that integrates Scira and DeepSeek APIs, allowing users to interact with both models seamlessly with automatic chaining capabilities.
+A unified web interface for interacting with multiple LLMs via Together AI and Scira. Features automatic chaining, markdown cleanup, and multi-model support.
 
-## Features
+---
 
-- **Multi-Model Integration**: Seamlessly integrate with both Scira and DeepSeek R1 APIs
-- **OpenRouter Integration**: Access DeepSeek R1 via OpenRouter's unified API
-- **Automatic Chaining**: Output from one model automatically becomes input for the next
-- **Flexible Processing Modes**: 
-  - Chained Processing (Scira → DeepSeek R1)
-  - Individual model processing (Scira only or DeepSeek R1 only)
-- **Real-time Processing**: Live processing time tracking and visualization
-- **Intuitive UI**: Clean, responsive interface inspired by modern AI platforms
-- **Copy to Clipboard**: Easy copying of responses
-- **Error Handling**: Robust error management and user feedback
+## ✨ Features
 
-## Tech Stack
+- **Multi-Model Integration**:
+  - Scira (via browser automation using Playwright)
+  - DeepSeek R1 Distill LLaMA-70B (via Together AI)
+  - Meta-LLaMA Models (e.g., LLaMA 3.3, LLaMA Vision)
 
-- **Frontend**: Next.js 15 with React 19
-- **Backend**: Next.js API Routes
-- **AI Integration**: OpenRouter API for DeepSeek R1 access
-- **UI Components**: Tailwind CSS with shadcn/ui
+- **Automatic Chaining**:
+  - Combines Scira + DeepSeek R1 to refine and summarize responses
+
+- **Flexible Modes**:
+  - `scira`: Only Scira
+  - `deepseek`: Only DeepSeek R1
+  - `chained`: Scira → DeepSeek R1
+  - `meta-llama/*`: Any Meta-LLaMA model via Together AI
+
+- **LaTeX + Markdown Cleanup**:
+  - Supports GFM, equations, references removal using `remark`
+
+- **Error Handling & Timeout Management**:
+  - Timeout detection for Scira scraping
+  - Safe fallbacks and error messaging
+
+- **Playwright Automation**:
+  - Scira integration uses Chromium headless automation for interaction
+
+---
+
+## 🛠 Tech Stack
+
+- **Frontend**: Next.js 15 + React 19
+- **Backend**: API Routes (Next.js)
+- **Markdown Processing**: `remark`, `remark-math`, `remark-gfm`
+- **Headless Browser**: Playwright (Chromium)
+- **UI**: Tailwind CSS + ShadCN/UI
 - **Icons**: Lucide React
-- **Deployment**: Vercel-ready
 
-## Getting Started
+---
 
-### Prerequisites
+## 🚀 Getting Started
 
-- Node.js 18+ 
-- npm or pnpm
-- OpenRouter API key (for DeepSeek R1 access)
-  
-### Installation
+### 1. Clone + Install
 
-1. Clone the repository:
-\`\`\`bash
-git clone <repository-url>
-cd unified-ai-interface
-\`\`\`
-
-2. Install dependencies:
-\`\`\`bash
+```bash
+git clone https://github.com/GOATNINJA10/Unify-AI
+cd Unify-AI
 npm install
 # or
 pnpm install
-\`\`\`
+#and
+npx playwright install
 
-3. Set up environment variables:
-\`\`\`bash
-# Create .env.local file
-\`\`\`
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-SITE_URL=http://localhost:3000
-\`\`\`
+```
+### 2. Environment Setup
 
-4. Run the development server:
-\`\`\`bash
+Create .env.local:
+
+
+```
+TOGETHER_API_KEY=your_together_api_key
+
+```
+### 3. Run Dev Server
+
+```
 npm run dev
+
 # or
+
 pnpm dev
-\`\`\`
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+Visit: http://localhost:3000
+```
+### 🔗 Chaining Logic
 
-## API Integration
+When `chained` mode is selected:
 
-### DeepSeek R1 via OpenRouter
+1. User input is sent to **Scira**
+2. Scira’s output is cleaned & processed (markdown, references, math)
+3. The cleaned output is embedded into a structured prompt
+4. That prompt is sent to **DeepSeek R1** via **Together AI**
+5. Final response is returned
 
-The application uses OpenRouter to access DeepSeek R1:
+### 📦 API Summary
+Endpoint
+```
 
-\`\`\`typescript
-const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    "Content-Type": "application/json",
-    "HTTP-Referer": process.env.SITE_URL,
-    "X-Title": "Unified AI Interface"
-  },
-  body: JSON.stringify({
-    model: "deepseek/deepseek-r1:nitro",
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 2000,
-    temperature: 0.7
-  })
-})
-\`\`\`
+POST /api/ai-chat
 
-### OpenRouter Setup
+```
+Request
 
-1. **Get API Key**: Sign up at [OpenRouter](https://openrouter.ai/) and get your API key
-2. **Model Access**: DeepSeek R1 is available as `deepseek/deepseek-r1:nitro`
-3. **Credits**: Ensure you have sufficient credits for API calls
-
-### Scira Integration
-
-The Scira integration is currently implemented as a mock. Replace the `callSciraAPI` function in `/app/api/ai-chat/route.ts` with your actual Scira API implementation:
-
-\`\`\`typescript
-async function callSciraAPI(prompt: string): Promise<string> {
-  // Replace this with actual Scira API integration
-  const response = await fetch('YOUR_SCIRA_API_ENDPOINT', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.SCIRA_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prompt }),
-  })
-  
-  const data = await response.json()
-  return data.response
+```
+{
+  "query": "Explain quantum tunneling",
+  "model": "chained"
 }
-\`\`\`
+Supported model values
+"scira"
 
-## Chaining Logic
+"deepseek"
 
-The application implements intelligent chaining where:
+"chained"
 
-1. **Step 1**: User query is processed by Scira
-2. **Step 2**: Scira's output is combined with the original query and sent to DeepSeek R1
-3. **Result**: DeepSeek R1 provides a refined, comprehensive response building on Scira's analysis
+"meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
-## Usage
+"meta-llama/Llama-Vision-Free"
+```
+### 📄 Response Format
+```
 
-1. **Select Processing Mode**:
-   - **Chained Processing**: Uses both models in sequence
-   - **Scira Only**: Uses only the Scira model
-   - **DeepSeek R1 Only**: Uses only the DeepSeek R1 model via OpenRouter
+{
+  "responses": [
+    {
+      "model": "scira",
+      "response": "...",
+      "timestamp": 1720425000000,
+      "processingTime": 12430
+    },
+    {
+      "model": "deepseek-r1",
+      "response": "...",
+      "timestamp": 1720425013000,
+      "processingTime": 8350
+    }
+  ],
+  "finalOutput": "...",
+  "totalTime": 20780,
+  "modelUsed": "deepseek-r1-distill-llama-70b",
+  "via": "Together AI"
+}
+```
+### 📐 Markdown Formatter
 
-2. **Enter Your Query**: Type your question or prompt in the text area
+All outputs are cleaned and normalized:
 
-3. **Submit**: Click "Submit Query" to process your request
+- LaTeX support via `remark-math`
+- GitHub-Flavored Markdown via `remark-gfm`
+- Reference cleanup (e.g., `[1]`, `2\n`, etc.)
+- Formatting rules enforced (bullets, indents, strong/emphasis)
 
-4. **View Results**: See individual model responses and processing times
+---
 
-5. **Copy Responses**: Use the copy button to copy any response to clipboard
+### 🧪 Performance & Monitoring
 
-## Environment Variables
+- Real-time processing times
+- Browser-controlled timeout for Scira
+- Automatic retries if models fail
+- Logs include length and response timing
 
-Required environment variables:
+---
 
-\`\`\`env
-OPENROUTER_API_KEY=your_openrouter_api_key
-SITE_URL=http://localhost:3000
-\`\`\`
+### ⚠️ Troubleshooting
 
-### OpenRouter Configuration
+**Missing API Key:**
 
-- **API Key**: Get from [OpenRouter Dashboard](https://openrouter.ai/keys)
-- **Model**: Uses `deepseek/deepseek-r1:nitro` for optimal performance
-- **Referer**: Required for OpenRouter API calls
-- **Credits**: Monitor usage in OpenRouter dashboard
+- Ensure `TOGETHER_API_KEY` is set in `.env.local`
 
-## DeepSeek R1 Capabilities
+**Scira Not Responding:**
 
-DeepSeek R1 via OpenRouter excels at:
-- **Complex Reasoning**: Multi-step logical analysis
-- **Mathematical Problem Solving**: Advanced mathematical reasoning
-- **Code Analysis**: Programming and technical problem solving
-- **Scientific Reasoning**: Research and analytical tasks
-- **Critical Thinking**: Analyzing and building upon existing responses
+- Check network stability and DOM selectors  
+- Modify timeout values if site structure changes
 
-## Error Handling
+**Playwright Errors:**
 
-The application includes comprehensive error handling:
+- Ensure Chromium is installed:
 
-- OpenRouter API failures
-- Invalid input validation
-- Network connectivity issues
-- Model-specific errors
-- User-friendly error messages with details
+```bash
+npx playwright install
+```
+### 🤝 Contributing
 
-## Performance Optimization
+1. Fork this repo  
+2. Create a branch: `feature/my-change`  
+3. Add logic or UI improvements  
+4. Create a PR
 
-- Efficient API request handling
-- Processing time tracking
-- Optimized UI rendering
-- Responsive design for all devices
-- Error recovery mechanisms
 
-## Deployment
-
-### Vercel Deployment
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard:
-   - `OPENROUTER_API_KEY`
-   - `SCIRA_API_KEY`
-   - `SCIRA_API_URL`
-   - `SITE_URL` (your deployed URL)
-4. Deploy automatically
-
-### Local Deployment
-
-\`\`\`bash
-npm run build
-npm start
-\`\`\`
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is part of the NemHem AI internship assessment.
-
-## Support
-
-For issues and questions, please create an issue in the repository or contact the development team.
-
-## OpenRouter Resources
-
-- [OpenRouter Documentation](https://openrouter.ai/docs)
-- [Model Pricing](https://openrouter.ai/models)
-- [API Keys Management](https://openrouter.ai/keys)
-- [Usage Dashboard](https://openrouter.ai/activity)
+### 📄 License
+This project is developed for the NemHem AI Internship Assessment and is subject to internal evaluation terms.
