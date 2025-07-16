@@ -1,4 +1,3 @@
-
 import { type NextRequest, NextResponse } from "next/server"
 import { chromium } from "playwright"
 import { PrismaClient } from "@prisma/client"
@@ -536,11 +535,29 @@ export async function POST(request: NextRequest) {
 
     // If query is empty string or missing, treat as fetch chat history request
     if ((!query || query.trim() === "") && user) {
+      if (conversationId && conversationId !== "new") {
+        const conversation = await prisma.conversation.findFirst({
+          where: { id: conversationId, userId: user.id },
+          include: { messages: { orderBy: { createdAt: "asc" } } },
+        })
+
+        if (!conversation) {
+          return NextResponse.json({ error: "Conversation not found or does not belong to user" }, { status: 404 })
+        }
+
+        return NextResponse.json({
+          conversationId: conversation.id,
+          messages: conversation.messages,
+        })
+      }
+
+      // fallback: load most recent conversation or create a new one
       let conversation = await prisma.conversation.findFirst({
         where: { userId: user.id },
         orderBy: { updatedAt: "desc" },
         include: { messages: { orderBy: { createdAt: "asc" } } },
       })
+
       if (!conversation) {
         conversation = await prisma.conversation.create({
           data: {
@@ -550,7 +567,7 @@ export async function POST(request: NextRequest) {
           include: { messages: true },
         })
       }
-      // Return conversation and messages without processing AI
+
       return NextResponse.json({
         conversationId: conversation.id,
         messages: conversation.messages,
