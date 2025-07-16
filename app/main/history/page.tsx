@@ -34,21 +34,50 @@ export default function ChatHistory() {
   const { toast } = useToast()
   const [messages, setMessages] = useState<Message[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<Array<{id: string, title: string, updatedAt: string, messageCount: number}>>([])
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login")
     } else if (status === "authenticated" && session?.user?.email) {
-      fetchChatHistory()
+      fetchConversations()
     }
   }, [status, session, router])
 
-  const fetchChatHistory = async () => {
+  const fetchConversations = async () => {
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session?.user?.email, query: "", model: "chained" }),
+        body: JSON.stringify({ userEmail: session?.user?.email, listConversations: true }),
+      })
+      if (!res.ok) {
+        throw new Error("Failed to fetch conversations")
+      }
+      const data = await res.json()
+      if (data.conversations && Array.isArray(data.conversations)) {
+        setConversations(data.conversations.map((conv: any) => ({
+          id: conv.id,
+          title: conv.title,
+          updatedAt: conv.updatedAt,
+          messageCount: conv._count?.messages || 0,
+        })))
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load conversations",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const fetchChatHistory = async (convId: string) => {
+    try {
+      const res = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userEmail: session?.user?.email, conversationId: convId, query: "", model: "chained" }),
       })
       if (!res.ok) {
         throw new Error("Failed to fetch chat history")
@@ -63,7 +92,16 @@ export default function ChatHistory() {
         }))
         setMessages(historyMessages)
         setConversationId(data.conversationId || null)
+        // Scroll to bottom after loading messages
+        setTimeout(() => {
+          const messagesEnd = document.getElementById("messages-end")
+          if (messagesEnd) {
+            messagesEnd.scrollIntoView({ behavior: "smooth" })
+          }
+        }, 100)
       }
+      // Force re-render by updating state with a new array reference
+      setMessages((prev) => [...prev])
     } catch (error) {
       toast({
         title: "Error",
@@ -116,28 +154,60 @@ export default function ChatHistory() {
         </div>
         <div className="text-center mt-2 mb-8 w-full max-w-2xl">
           <h1 className="text-white text-2xl font-semibold mb-4">Chat History</h1>
-          {messages.length === 0 && <p className="text-gray-400">No chat history found.</p>}
-          {messages.length > 0 && (
+          {conversations.length === 0 && <p className="text-gray-400">No conversations found.</p>}
+          {conversations.length > 0 && (
             <main className="overflow-y-auto space-y-4 max-h-[70vh]">
-              {messages.map((msg) => (
+              {conversations.map((conv) => (
                 <div
-                  key={msg.id}
-                  className={`p-4 rounded-lg ${
-                    msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
-                  }`}
+                  key={conv.id}
+                  className="p-4 rounded-lg bg-gray-800 text-gray-300 cursor-pointer hover:bg-gray-700"
+                  onClick={() => {
+                    fetchChatHistory(conv.id)
+                    setConversationId(conv.id)
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      fetchChatHistory(conv.id)
+                      setConversationId(conv.id)
+                    }
+                  }}
                 >
-                  <div className="flex items-center mb-2 gap-2">
-                    {!msg.isUser && getModelIcon(msg.model)}
-                    <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold">{conv.title || "Untitled Conversation"}</span>
+                    <span className="text-xs text-gray-400">{new Date(conv.updatedAt).toLocaleString()}</span>
                   </div>
-                  <div className="prose prose-invert max-w-none whitespace-pre-wrap">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {convertLatexDelimiters(msg.text)}
-                    </ReactMarkdown>
-                  </div>
+                  <div className="text-xs text-gray-400">{conv.messageCount} messages</div>
                 </div>
-              ))}
+          ))}
             </main>
+          )}
+          {messages.length > 0 && (
+            <>
+              <h2 className="text-white text-xl font-semibold mt-6 mb-4">Messages</h2>
+              <main className="overflow-y-auto space-y-4 max-h-[50vh] w-full">
+                {messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`p-4 rounded-lg ${
+                      msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
+                    }`}
+                  >
+                    <div className="flex items-center mb-2 gap-2">
+                      {!msg.isUser && getModelIcon(msg.model)}
+                      <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
+                    </div>
+                    <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {convertLatexDelimiters(msg.text)}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
+                <div id="messages-end" />
+              </main>
+            </>
           )}
         </div>
       </div>

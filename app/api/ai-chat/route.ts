@@ -302,7 +302,7 @@ Please provide a concise and well-structured  that:
     throw new Error(`Chaining failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
-
+//curl -X POST http://localhost:3000/api/ai-chat -H "Content-Type: application/json" -d '{"userEmail":"abc@gmail.com","conversationId":"cmd5xx0ai0007pjv0soideth4","query":"","model":"chained"}'
 // Single model processing
 async function processSingleModel(query: string, model: "scira" | "deepseek") {
   console.log("Processing single model request:", model, "for query:", query)
@@ -502,7 +502,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("Request body:", body)
 
-    let { query, model, image, conversationId, userEmail } = body
+    let { query, model, image, conversationId, userEmail, listConversations } = body
 
     if (!userEmail || typeof userEmail !== "string") {
       console.error("Invalid or missing userEmail:", userEmail)
@@ -519,16 +519,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
+    // If listConversations flag is true, return list of user's conversations
+    if (listConversations === true) {
+      const conversations = await prisma.conversation.findMany({
+        where: { userId: user.id },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          updatedAt: true,
+          _count: { select: { messages: true } },
+        },
+      })
+      return NextResponse.json({ conversations })
+    }
+
     // If query is empty string or missing, treat as fetch chat history request
     if ((!query || query.trim() === "") && user) {
-      // Fetch conversation by userId
       let conversation = await prisma.conversation.findFirst({
         where: { userId: user.id },
         orderBy: { updatedAt: "desc" },
         include: { messages: { orderBy: { createdAt: "asc" } } },
       })
       if (!conversation) {
-        // Create new conversation if none exists
         conversation = await prisma.conversation.create({
           data: {
             title: "New Conversation",
@@ -544,7 +557,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (!query || typeof query !== "string") {
+    if (query === undefined || query === null || typeof query !== "string") {
       console.error("Invalid query:", query)
       return NextResponse.json({ error: "Query is required and must be a string" }, { status: 400 })
     }
@@ -581,30 +594,23 @@ export async function POST(request: NextRequest) {
 
     // Fetch or create conversation if conversationId or userId is provided
     let conversation = null
-    if (conversationId) {
-      conversation = await prisma.conversation.findUnique({
-        where: { id: conversationId },
+    if (conversationId && conversationId !== "new") {
+      conversation = await prisma.conversation.findFirst({
+        where: { id: conversationId, userId: user.id },
         include: { messages: { orderBy: { createdAt: "asc" } } },
       })
       if (!conversation) {
-        return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+        return NextResponse.json({ error: "Conversation not found or does not belong to user" }, { status: 404 })
       }
     } else if (user) {
-      conversation = await prisma.conversation.findFirst({
-        where: { userId: user.id },
-        orderBy: { updatedAt: "desc" },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
+      // Create new conversation if conversationId is "new" or null
+      conversation = await prisma.conversation.create({
+        data: {
+          title: "New Conversation",
+          userId: user.id,
+        },
+        include: { messages: true },
       })
-      if (!conversation) {
-        // Create new conversation
-        conversation = await prisma.conversation.create({
-          data: {
-            title: "New Conversation",
-            userId: user.id,
-          },
-          include: { messages: true },
-        })
-      }
     }
 
     // Store user message if conversation exists
@@ -642,6 +648,12 @@ export async function POST(request: NextRequest) {
           conversationId: conversation.id,
           model,
         },
+      })
+
+      // Re-fetch conversation messages after storing new messages
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversation.id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
       })
     }
 
