@@ -63,13 +63,13 @@ export default function DeepSeekChat() {
   const [conversationId, setConversationId] = useState<string | null>(null)
 
   // Function to fetch chat history from backend
-  const fetchChatHistory = async () => {
+  const fetchChatHistory = async (convId?: string | null) => {
     if (!session?.user?.email) return
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session.user.email, query: "", model: selectedModel, conversationId }),
+        body: JSON.stringify({ userEmail: session.user.email, query: "", model: selectedModel, conversationId: convId ?? conversationId }),
       })
       if (!res.ok) {
         throw new Error("Failed to fetch chat history")
@@ -236,6 +236,7 @@ export default function DeepSeekChat() {
     setInput("")
     setImageFile(null)
     setImagePreview(null)
+    setConversationId(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -288,7 +289,7 @@ export default function DeepSeekChat() {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData }),
+        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData, conversationId }),
       })
 
       if (!res.ok) {
@@ -402,6 +403,14 @@ export default function DeepSeekChat() {
             title="Load Chat History"
           >
             Load Chat History
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="mt-2 ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            aria-label="New Chat"
+            title="New Chat"
+          >
+            New Chat
           </button>
         </div>
 
