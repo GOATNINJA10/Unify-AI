@@ -230,42 +230,52 @@ async function callSciraAPI(prompt: string): Promise<string> {
 }
 
 // Main chaining logic with Together AI integration
-async function processChainedRequest(query: string) {
-  console.log("Processing chained request for query:", query)
+async function processChainedRequest(query: string, firstModel: string, secondModel: string) {
+  console.log("Processing chained request for query:", query, "with models:", firstModel, secondModel)
 
   const responses = []
   const startTime = Date.now()
 
   try {
-    // Step 1: Process with Scira
-    console.log("Step 1: Processing with Scira")
-    const sciraStart = Date.now()
-    const sciraResponse = await callSciraAPI(query)
-    const sciraTime = Date.now() - sciraStart
-    console.log("Scira processing completed in", sciraTime, "ms")
+    // Step 1: Process with firstModel
+    console.log(`Step 1: Processing with ${firstModel}`)
+    let firstResponse: string
+    if (firstModel === "scira") {
+      firstResponse = await callSciraAPI(query)
+    } else if (firstModel === "deepseek") {
+      firstResponse = await callDeepSeekR1API(query)
+    } else if (firstModel.startsWith("meta-llama") || firstModel === "gemma3:1b" || firstModel === "qwen2.5vl:3b" || firstModel === "llama3.2" || firstModel === "qwen2.5-coder:0.5b" || firstModel === "phi:2.7b" || firstModel === "tinyllama") {
+      firstResponse = (await processMetaLlamaModel(query, firstModel)).finalOutput
+    } else {
+      throw new Error(`Unsupported first model: ${firstModel}`)
+    }
+    const firstTime = Date.now() - startTime
+    console.log(`${firstModel} processing completed in`, firstTime, "ms")
 
     responses.push({
-      model: "scira",
-      response: sciraResponse,
+      model: firstModel,
+      response: firstResponse,
       timestamp: Date.now(),
-      processingTime: sciraTime,
+      processingTime: firstTime,
     })
 
-    // Step 2: Use Scira output as input for DeepSeek R1 with enhanced prompting
-    console.log("Step 2: Processing with DeepSeek R1 via Together AI")
-    const deepseekStart = Date.now()
-    
-    // Enhanced prompt for Together AI's DeepSeek R1
-    const systemPrompt = `You are DeepSeek R1, an advanced AI assistant. Your task is to refine the following response in a clear, concise manner.`
-    
-    const chainedPrompt = `## Original User Query
+    // Step 2: Use firstModel output as input for secondModel with enhanced prompting
+    console.log(`Step 2: Processing with ${secondModel} via chaining`)
+    const secondStart = Date.now()
+
+    let secondResponse: string
+    if (secondModel === "scira") {
+      secondResponse = await callSciraAPI(firstResponse)
+    } else if (secondModel === "deepseek") {
+      // Enhanced prompt for DeepSeek R1
+      const chainedPrompt = `## Original User Query
 ${query}
 
-## Initial Response from Scira
-${sciraResponse}
+## Initial Response from ${firstModel}
+${firstResponse}
 
 ## Your Task
-Please provide a concise and well-structured  that:
+Please provide a concise and well-structured summary that:
 1. Captures the key points from the initial response
 2. Removes any redundancy or unnecessary details
 3. Maintains accuracy and preserves important information
@@ -273,17 +283,20 @@ Please provide a concise and well-structured  that:
 5. Is more concise than the original while preserving meaning
 
 ## Your Summary:`
+      secondResponse = await callDeepSeekR1API(chainedPrompt)
+    } else if (secondModel.startsWith("meta-llama") || secondModel === "gemma3:1b" || secondModel === "qwen2.5vl:3b" || secondModel === "llama3.2" || secondModel === "qwen2.5-coder:0.5b" || secondModel === "phi:2.7b" || secondModel === "tinyllama") {
+      secondResponse = (await processMetaLlamaModel(firstResponse, secondModel)).finalOutput
+    } else {
+      throw new Error(`Unsupported second model: ${secondModel}`)
+    }
+    const secondTime = Date.now() - secondStart
+    console.log(`${secondModel} processing completed in`, secondTime, "ms")
 
-    const deepseekResponse = await callDeepSeekR1API(chainedPrompt)
-    const deepseekTime = Date.now() - deepseekStart
-    console.log("DeepSeek R1 processing completed in", deepseekTime, "ms")
-
-    // Only include the DeepSeek response in the final output
     responses.push({
-      model: "deepseek-r1",
-      response: deepseekResponse,
+      model: secondModel,
+      response: secondResponse,
       timestamp: Date.now(),
-      processingTime: deepseekTime,
+      processingTime: secondTime,
     })
 
     const totalTime = Date.now() - startTime
@@ -291,10 +304,10 @@ Please provide a concise and well-structured  that:
 
     return {
       responses,
-      finalOutput: deepseekResponse, // Only return the DeepSeek response
+      finalOutput: secondResponse,
       totalTime,
-      modelUsed: "deepseek-r1-distill-llama-70b",
-      via: "Together AI"
+      modelUsed: secondModel,
+      via: "Chained Processing"
     }
   } catch (error) {
     console.error("Chaining error:", error)
@@ -501,7 +514,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("Request body:", body)
 
-    let { query, model, image, conversationId, userEmail, listConversations, contextMode } = body
+    let { query, model, firstModel, secondModel, image, conversationId, userEmail, listConversations, contextMode } = body
 
     if (!userEmail || typeof userEmail !== "string") {
       console.error("Invalid or missing userEmail:", userEmail)
@@ -659,7 +672,7 @@ export async function POST(request: NextRequest) {
     let result: any = null
 
     if (model === "chained") {
-      result = await processChainedRequest(promptToSend)
+      result = await processChainedRequest(promptToSend, firstModel, secondModel)
     } else if (model === "scira" || model === "deepseek") {
       result = await processSingleModel(promptToSend, model as "scira" | "deepseek")
     } else if (model === "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" || model === "meta-llama/Llama-Vision-Free") {

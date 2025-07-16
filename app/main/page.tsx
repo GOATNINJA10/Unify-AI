@@ -51,7 +51,10 @@ export default function DeepSeekChat() {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "chained" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("chained")
+  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("scira")
+  const [firstModel, setFirstModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("scira")
+  const [secondModel, setSecondModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("deepseek")
+  const [chainedMode, setChainedMode] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState(false)
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
   const [isCheckingHealth, setIsCheckingHealth] = useState(true)
@@ -243,96 +246,105 @@ export default function DeepSeekChat() {
     setConversationId(null)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() && !imageFile) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter a message or upload an image before sending.",
-        variant: "destructive",
-      })
-      return
-    }
-    if (healthStatus?.status === "error") {
-      toast({
-        title: "System Error",
-        description: healthStatus.message || "Please check your configuration.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsLoading(true)
-
-    const userMessage: Message = {
-      id: messageIdRef.current++,
-      model: "user",
-      text: input,
-      isUser: true,
-    }
-    setMessages((prev) => [...prev, userMessage])
-
-    // Prepare payload
-    let imageData: string | null = null
-    if (imageFile) {
-      imageData = await new Promise<string | null>((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          resolve(reader.result as string)
-        }
-        reader.onerror = () => resolve(null)
-        reader.readAsDataURL(imageFile)
-      })
-    }
-
-    setInput("")
-    setImageFile(null)
-    setImagePreview(null)
-
-    try {
-      const res = await fetch("/api/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData, conversationId, contextMode }),
-      })
-
-      if (!res.ok) {
-        let errorMsg = "Failed to get AI response"
-        try {
-          const errorData = await res.json()
-          errorMsg = errorData?.error || errorMsg
-        } catch {
-          const errorText = await res.text()
-          if (errorText) errorMsg = errorText
-        }
-        throw new Error(errorMsg)
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!input.trim() && !imageFile) {
+        toast({
+          title: "Validation Error",
+          description: "Please enter a message or upload an image before sending.",
+          variant: "destructive",
+        })
+        return
       }
-
-      const data = await res.json()
-      const aiResponseText = data.finalOutput || "No response"
-
-      const aiMessage: Message = {
+      if (healthStatus?.status === "error") {
+        toast({
+          title: "System Error",
+          description: healthStatus.message || "Please check your configuration.",
+          variant: "destructive",
+        })
+        return
+      }
+  
+      setIsLoading(true)
+  
+      const userMessage: Message = {
         id: messageIdRef.current++,
-        model: selectedModel,
-        text: aiResponseText,
-        isUser: false,
+        model: "user",
+        text: input,
+        isUser: true,
       }
-      setMessages((prev) => [...prev, aiMessage])
-      toast({
-        title: "Success",
-        description: "Response received",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get AI response",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-      inputRef.current?.focus()
+      setMessages((prev) => [...prev, userMessage])
+  
+      // Prepare payload
+      let imageData: string | null = null
+      if (imageFile) {
+        imageData = await new Promise<string | null>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            resolve(reader.result as string)
+          }
+          reader.onerror = () => resolve(null)
+          reader.readAsDataURL(imageFile)
+        })
+      }
+  
+      setInput("")
+      setImageFile(null)
+      setImagePreview(null)
+  
+      try {
+        const bodyPayload: any = { userEmail: session?.user?.email, query: input, image: imageData, conversationId, contextMode }
+        if (chainedMode) {
+          bodyPayload.firstModel = firstModel
+          bodyPayload.secondModel = secondModel
+          bodyPayload.model = "chained"
+        } else {
+          bodyPayload.model = selectedModel
+        }
+  
+        const res = await fetch("/api/ai-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+        })
+  
+        if (!res.ok) {
+          let errorMsg = "Failed to get AI response"
+          try {
+            const errorData = await res.json()
+            errorMsg = errorData?.error || errorMsg
+          } catch {
+            const errorText = await res.text()
+            if (errorText) errorMsg = errorText
+          }
+          throw new Error(errorMsg)
+        }
+  
+        const data = await res.json()
+        const aiResponseText = data.finalOutput || "No response"
+  
+        const aiMessage: Message = {
+          id: messageIdRef.current++,
+          model: selectedModel,
+          text: aiResponseText,
+          isUser: false,
+        }
+        setMessages((prev) => [...prev, aiMessage])
+        toast({
+          title: "Success",
+          description: "Response received",
+        })
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to get AI response",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+        inputRef.current?.focus()
+      }
     }
-  }
 
   const getModelIcon = (model: string) => {
     switch (model) {
@@ -471,42 +483,74 @@ export default function DeepSeekChat() {
                 target.style.overflowY = newHeight >= 200 ? 'auto' : 'hidden'
               }}
             />
-          <div className="absolute bottom-4 left-4 flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value as "chained" | "scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b")}
-              className="bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
-              title="Select Model"
-              aria-label="Model selection"
-              disabled={isLoading}
-            >
-              <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
-              <option value="scira">Scira Only</option>
-              <option value="deepseek">DeepSeek R1 Only</option>
-              <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
-              <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
-              <option value="gemma3:1b">Gemma3 1B</option>
-              <option value="qwen2.5vl:3b">Gemma3 4B</option>
-              <option value="llama3.2">Llama 3.2</option>
-              <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
-              <option value="phi:2.7b">Phi 2.7B</option>
-              <option value="tinyllama">TinyLlama</option>
-            </select>
+          <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
+              {/* First Model Dropdown */}
+              <div className="flex flex-col">
+                <label htmlFor="first-model-select" className="text-xs text-gray-400">First Model</label>
+                <select
+                  id="first-model-select"
+                  value={firstModel}
+                  onChange={(e) => setFirstModel(e.target.value as typeof firstModel)}
+                  className="bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
+                  title="Select First Model"
+                  aria-label="First model selection"
+                  disabled={isLoading}
+                >
+                  <option value="scira">Scira</option>
+                  <option value="deepseek">DeepSeek R1</option>
+                  <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Turbo</option>
+                  <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+                  <option value="gemma3:1b">Gemma3 1B</option>
+                  <option value="qwen2.5vl:3b">Gemma3 4B</option>
+                  <option value="llama3.2">Llama 3.2</option>
+                  <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+                  <option value="phi:2.7b">Phi 2.7B</option>
+                  <option value="tinyllama">TinyLlama</option>
+                </select>
+              </div>
 
-            {/* Context Mode Toggle */}
-            <div className="flex items-center space-x-2 text-gray-300">
-              <label htmlFor="context-mode-toggle" className="text-sm select-none cursor-pointer">
-                Context Mode
-              </label>
-              <Toggle
-                id="context-mode-toggle"
-                pressed={contextMode}
-                onPressedChange={setContextMode}
-                disabled={isLoading}
-                aria-label="Toggle context mode"
-              />
+              {/* Second Model Dropdown (disabled if not in chained mode) */}
+              <div className="flex flex-col">
+                <label htmlFor="second-model-select" className="text-xs text-gray-400">Second Model</label>
+                <select
+                  id="second-model-select"
+                  value={secondModel}
+                  onChange={(e) => setSecondModel(e.target.value as typeof secondModel)}
+                  className={`bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer transition-opacity ${
+                    chainedMode ? "opacity-100" : "opacity-50"
+                  }`}
+                  title="Select Second Model"
+                  aria-label="Second model selection"
+                  disabled={!chainedMode || isLoading}
+                >
+                  <option value="scira">Scira</option>
+                  <option value="deepseek">DeepSeek R1</option>
+                  <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Turbo</option>
+                  <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+                  <option value="gemma3:1b">Gemma3 1B</option>
+                  <option value="qwen2.5vl:3b">Gemma3 4B</option>
+                  <option value="llama3.2">Llama 3.2</option>
+                  <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+                  <option value="phi:2.7b">Phi 2.7B</option>
+                  <option value="tinyllama">TinyLlama</option>
+                </select>
+              </div>
+
+              {/* Context Mode Toggle */}
+              <div className="flex items-center space-x-2 text-gray-300">
+                <label htmlFor="context-mode-toggle" className="text-sm select-none cursor-pointer">
+                  Context Mode
+                </label>
+                <Toggle
+                  id="context-mode-toggle"
+                  pressed={contextMode}
+                  onPressedChange={setContextMode}
+                  disabled={isLoading}
+                  aria-label="Toggle context mode"
+                />
+              </div>
             </div>
-          </div>
+
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
               {imagePreview ? (
                 <div className="relative">
