@@ -501,7 +501,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("Request body:", body)
 
-    let { query, model, image, conversationId, userEmail, listConversations } = body
+    let { query, model, image, conversationId, userEmail, listConversations, contextMode } = body
 
     if (!userEmail || typeof userEmail !== "string") {
       console.error("Invalid or missing userEmail:", userEmail)
@@ -642,18 +642,31 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Prepare prompt with or without context based on contextMode
+    let promptToSend = query
+    if (contextMode && conversation) {
+      // Include last 10 messages as context (excluding the current query)
+      const lastMessages = conversation.messages
+        .filter(msg => msg.content && msg.content.trim() !== "")
+        .slice(-10)
+        .map(msg => (msg.isUser ? `User: ${msg.content}` : `AI: ${msg.content}`))
+        .join("\n")
+
+      promptToSend = `${lastMessages}\nUser: ${query}`
+    }
+
     console.log("Processing request with model:", model)
     let result: any = null
 
     if (model === "chained") {
-      result = await processChainedRequest(query)
+      result = await processChainedRequest(promptToSend)
     } else if (model === "scira" || model === "deepseek") {
-      result = await processSingleModel(query, model as "scira" | "deepseek")
+      result = await processSingleModel(promptToSend, model as "scira" | "deepseek")
     } else if (model === "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" || model === "meta-llama/Llama-Vision-Free") {
       // For these models, call Together AI API with the model name directly
-      result = await processMetaLlamaModel(query, model)
+      result = await processMetaLlamaModel(promptToSend, model)
     } else if (model === "gemma3:1b" || model === "qwen2.5vl:3b" || model === "llama3.2" || model === "qwen2.5-coder:0.5b" || model === "phi:2.7b" || model === "tinyllama") {
-      result = await processOllamaModel(query, model)
+      result = await processOllamaModel(promptToSend, model)
     }
 
     // Store AI response message if conversation exists

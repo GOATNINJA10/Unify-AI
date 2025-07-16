@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Paperclip, ArrowUp, Zap, Globe, Repeat, Mic, ImageIcon, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Toggle } from "@/components/ui/toggle"
 
 interface Message {
   id: number
@@ -61,6 +62,9 @@ export default function DeepSeekChat() {
   
   // New state for conversationId to track chat history
   const [conversationId, setConversationId] = useState<string | null>(null)
+
+  // New state for context mode toggle
+  const [contextMode, setContextMode] = useState<boolean>(false)
 
   // Function to fetch chat history from backend
   const fetchChatHistory = async (convId?: string | null) => {
@@ -289,7 +293,7 @@ export default function DeepSeekChat() {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData, conversationId }),
+        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData, conversationId, contextMode }),
       })
 
       if (!res.ok) {
@@ -467,26 +471,42 @@ export default function DeepSeekChat() {
                 target.style.overflowY = newHeight >= 200 ? 'auto' : 'hidden'
               }}
             />
+          <div className="absolute bottom-4 left-4 flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value as "chained" | "scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b")}
-              className="absolute bottom-4 left-4 bg-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
+              className="bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
               title="Select Model"
               aria-label="Model selection"
-            disabled={isLoading}
-          >
-            <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
-            <option value="scira">Scira Only</option>
-            <option value="deepseek">DeepSeek R1 Only</option>
-            <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
-            <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
-            <option value="gemma3:1b">Gemma3 1B</option>
-            <option value="qwen2.5vl:3b">Gemma3 4B</option>
-            <option value="llama3.2">Llama 3.2</option>
-            <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
-            <option value="phi:2.7b">Phi 2.7B</option>
-            <option value="tinyllama">TinyLlama</option>
-          </select>
+              disabled={isLoading}
+            >
+              <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
+              <option value="scira">Scira Only</option>
+              <option value="deepseek">DeepSeek R1 Only</option>
+              <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
+              <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+              <option value="gemma3:1b">Gemma3 1B</option>
+              <option value="qwen2.5vl:3b">Gemma3 4B</option>
+              <option value="llama3.2">Llama 3.2</option>
+              <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+              <option value="phi:2.7b">Phi 2.7B</option>
+              <option value="tinyllama">TinyLlama</option>
+            </select>
+
+            {/* Context Mode Toggle */}
+            <div className="flex items-center space-x-2 text-gray-300">
+              <label htmlFor="context-mode-toggle" className="text-sm select-none cursor-pointer">
+                Context Mode
+              </label>
+              <Toggle
+                id="context-mode-toggle"
+                pressed={contextMode}
+                onPressedChange={setContextMode}
+                disabled={isLoading}
+                aria-label="Toggle context mode"
+              />
+            </div>
+          </div>
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
               {imagePreview ? (
                 <div className="relative">

@@ -146,7 +146,7 @@ export default function ChatHistory() {
     <TooltipProvider>
       <div className="min-h-screen bg-gray-950 flex flex-col px-4 justify-start items-center">
         <div className="absolute top-4 right-4 flex items-center space-x-4">
-          <Button onClick={() => router.push("/main/page")}>Back to Chat</Button>
+          <Button onClick={() => router.push("/main/")}>Back to Chat</Button>
           <Button onClick={() => signOut()}>Sign Out</Button>
           <Avatar>
             <AvatarFallback>{session?.user?.email?.[0].toUpperCase()}</AvatarFallback>
