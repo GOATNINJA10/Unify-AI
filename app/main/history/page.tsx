@@ -20,6 +20,9 @@ interface Message {
   model: string
   text: string
   isUser: boolean
+  fileName?: string
+  fileType?: string
+  fileUrl?: string
   // Optional responses array for chained messages
   responses?: { model: string; text: string }[]
 }
@@ -257,11 +260,27 @@ export default function ChatHistory() {
                           {!msg.isUser && getModelIcon(msg.model)}
                           <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
                         </div>
-                        <div className="prose prose-invert max-w-none whitespace-pre-wrap">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {convertLatexDelimiters(msg.text)}
-                          </ReactMarkdown>
-                        </div>
+                    <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                      {msg.fileUrl ? (
+                        msg.fileType?.startsWith("image/") ? (
+                          <img src={msg.fileUrl} alt={msg.fileName || "Uploaded image"} className="max-w-xs rounded-md" />
+                        ) : (
+                          <a
+                            href={msg.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 underline break-all"
+                            download={msg.fileName || undefined}
+                          >
+                            {msg.fileName || "Download file"}
+                          </a>
+                        )
+                      ) : (
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {convertLatexDelimiters(msg.text)}
+                        </ReactMarkdown>
+                      )}
+                    </div>
                       </>
                     )}
                   </div>

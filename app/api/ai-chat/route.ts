@@ -581,7 +581,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("Request body:", body)
 
-    let { query, model, firstModel, secondModel, image, conversationId, userEmail, listConversations, contextMode } = body
+    let { query, model, firstModel, secondModel, image, conversationId, userEmail, listConversations, contextMode, fileName, fileType, fileUrl } = body
 
     if (!userEmail || typeof userEmail !== "string") {
       console.error("Invalid or missing userEmail:", userEmail)
@@ -689,6 +689,21 @@ export async function POST(request: NextRequest) {
       // For now, we rely on the model's vision capability to process the image data sent separately.
     }
 
+    // If file data is present and is a text-based file, decode and include content in prompt
+    if (fileUrl && fileType && fileType.startsWith("text/")) {
+      try {
+        // Decode base64 content from data URL
+        const base64Content = fileUrl.split(",")[1] || ""
+        const buffer = Buffer.from(base64Content, "base64")
+        const fileContent = buffer.toString("utf-8")
+
+        // Append file content to the query with instruction
+        query = `The following is the content of an uploaded file:\n${fileContent}\nUser query: ${query}`
+      } catch (error) {
+        console.error("Error decoding file content:", error)
+      }
+    }
+
     // Fetch or create conversation if conversationId or userId is provided
     let conversation = null
     if (conversationId && conversationId !== "new") {
@@ -718,6 +733,9 @@ export async function POST(request: NextRequest) {
           isUser: true,
           conversationId: conversation.id,
           model,
+          fileName: fileName || null,
+          fileType: fileType || null,
+          fileUrl: fileUrl || null,
         },
       })
     }

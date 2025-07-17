@@ -102,9 +102,11 @@ export default function DeepSeekChat() {
     }
   }
 
-  // New states for image upload and mic
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  // New states for file upload and mic
+  const [file, setFile] = useState<File | null>(null)
+  const [filePreview, setFilePreview] = useState<string | null>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [fileType, setFileType] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const recognitionRef = useRef<any>(null)
 
@@ -118,27 +120,33 @@ export default function DeepSeekChat() {
   }, [status, router])
 
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreview(null)
+    if (!file) {
+      setFilePreview(null)
+      setFileName(null)
+      setFileType(null)
       return
     }
     const reader = new FileReader()
     reader.onloadend = () => {
-      setImagePreview(reader.result as string)
+      setFilePreview(reader.result as string)
     }
-    reader.readAsDataURL(imageFile)
-  }, [imageFile])
+    reader.readAsDataURL(file)
+    setFileName(file.name)
+    setFileType(file.type)
+  }, [file])
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null
-    if (file) {
-      setImageFile(file)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0] || null
+    if (selectedFile) {
+      setFile(selectedFile)
     }
   }
 
-  const removeImage = () => {
-    setImageFile(null)
-    setImagePreview(null)
+  const removeFile = () => {
+    setFile(null)
+    setFilePreview(null)
+    setFileName(null)
+    setFileType(null)
   }
 
   const startRecording = () => {
@@ -276,24 +284,26 @@ export default function DeepSeekChat() {
     setMessages((prev) => [...prev, userMessage])
 
     // Prepare payload
-    let imageData: string | null = null
-    if (imageFile) {
-      imageData = await new Promise<string | null>((resolve) => {
+    let fileData: string | null = null
+    if (file) {
+      fileData = await new Promise<string | null>((resolve) => {
         const reader = new FileReader()
         reader.onloadend = () => {
           resolve(reader.result as string)
         }
         reader.onerror = () => resolve(null)
-        reader.readAsDataURL(imageFile)
+        reader.readAsDataURL(file)
       })
     }
 
     setInput("")
-    setImageFile(null)
-    setImagePreview(null)
+    setFile(null)
+    setFilePreview(null)
+    setFileName(null)
+    setFileType(null)
 
     try {
-      const bodyPayload: any = { userEmail: session?.user?.email, query: input, image: imageData, conversationId, contextMode }
+      const bodyPayload: any = { userEmail: session?.user?.email, query: input, fileName, fileType, fileUrl: fileData, conversationId, contextMode }
       if (chainedMode) {
         bodyPayload.firstModel = firstModel
         bodyPayload.secondModel = secondModel
@@ -599,33 +609,39 @@ export default function DeepSeekChat() {
             </div>
 
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
-              {imagePreview ? (
-                <div className="relative">
-                  <img src={imagePreview} alt="Preview" className="h-16 w-16 rounded-md object-cover" />
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    className="absolute top-0 right-0 bg-gray-700 rounded-full p-1 text-white hover:bg-gray-600"
-                    aria-label="Remove image"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <label htmlFor="image-upload" className="cursor-pointer text-gray-400 hover:text-white" title="Upload Image" aria-label="Upload Image">
-                    <ImageIcon className="h-6 w-6" />
-                  </label>
-                  <input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                    disabled={isLoading}
-                  />
-                </>
-              )}
+            {filePreview ? (
+              <div className="relative max-w-xs max-h-40 overflow-hidden rounded-md border border-gray-600">
+                {fileType?.startsWith("image/") ? (
+                  <img src={filePreview} alt="Preview" className="h-16 w-16 object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center h-16 w-16 bg-gray-700 text-gray-300 text-xs font-mono">
+                    {fileName || "File"}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={removeFile}
+                  className="absolute top-0 right-0 bg-gray-700 rounded-full p-1 text-white hover:bg-gray-600"
+                  aria-label="Remove file"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="file-upload" className="cursor-pointer text-gray-400 hover:text-white" title="Upload File" aria-label="Upload File">
+                  <ImageIcon className="h-6 w-6" />
+                </label>
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept="*/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={isLoading}
+                />
+              </>
+            )}
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}
@@ -636,15 +652,15 @@ export default function DeepSeekChat() {
               >
                 <Mic className="h-6 w-6" />
               </button>
-              <button
-                type="submit"
-                disabled={isLoading || (!input.trim() && !imageFile)}
-                className="text-blue-500 hover:text-blue-400 disabled:text-gray-600 disabled:cursor-not-allowed"
-                aria-label="Send message"
-                title={isLoading ? "Processing..." : (!input.trim() && !imageFile) ? "Please enter a message or upload an image" : "Send message"}
-              >
-                {isLoading ? <Repeat className="h-6 w-6 animate-spin text-blue-500" /> : <ArrowUp className="h-6 w-6" />}
-              </button>
+            <button
+              type="submit"
+              disabled={isLoading || (!input.trim() && !file)}
+              className="text-blue-500 hover:text-blue-400 disabled:text-gray-600 disabled:cursor-not-allowed"
+              aria-label="Send message"
+              title={isLoading ? "Processing..." : (!input.trim() && !file) ? "Please enter a message or upload a file" : "Send message"}
+            >
+              {isLoading ? <Repeat className="h-6 w-6 animate-spin text-blue-500" /> : <ArrowUp className="h-6 w-6" />}
+            </button>
             </div>
           </div>
         </form>

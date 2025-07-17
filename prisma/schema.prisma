@@ -37,6 +37,9 @@ model Message {
   content        String
   isUser         Boolean
   model          String?
+  fileName       String?      // New optional field for uploaded file name
+  fileType       String?      // New optional field for uploaded file MIME type
+  fileUrl        String?      // New optional field for uploaded file URL or base64 data
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
