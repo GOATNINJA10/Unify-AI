@@ -58,7 +58,7 @@ export default function DeepSeekChat() {
   const messageIdRef = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  
+
   // New state for conversationId to track chat history
   const [conversationId, setConversationId] = useState<string | null>(null)
 
@@ -121,7 +121,7 @@ export default function DeepSeekChat() {
     }
     reader.readAsDataURL(imageFile)
   }, [imageFile])
-  
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     if (file) {
@@ -380,10 +380,27 @@ export default function DeepSeekChat() {
   return (
     <TooltipProvider>
       <div
-        className={`min-h-screen bg-gray-950 flex flex-col px-4 ${
-          messages.length === 0 ? "justify-center items-center" : "justify-start items-center"
-        }`}
+        className={`min-h-screen bg-gray-950 flex flex-col px-4 ${messages.length === 0 ? "justify-center items-center" : "justify-start items-center"
+          }`}
       >
+        <div className="absolute top-4 left-4 flex items-center space-x-4">
+          <button
+            onClick={() => router.push("/main/history")}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            aria-label="Load Chat History"
+            title="Load Chat History"
+          >
+            Load Chat History
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            aria-label="New Chat"
+            title="New Chat"
+          >
+            New Chat
+          </button>
+        </div>
         <div className="absolute top-4 right-4 flex items-center space-x-4">
           <Button onClick={() => signOut()}>Sign Out</Button>
           <Avatar>
@@ -396,22 +413,6 @@ export default function DeepSeekChat() {
           <Zap className="mx-auto mb-2 h-10 w-10 text-blue-500" />
           <h1 className="text-white text-2xl font-semibold">Hi, I'm Unify.</h1>
           <p className="text-gray-400 mt-1">How can I help you today?</p>
-          <button
-            onClick={() => router.push("/main/history")}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            aria-label="Load Chat History"
-            title="Load Chat History"
-          >
-            Load Chat History
-          </button>
-          <button
-            onClick={handleNewChat}
-            className="mt-2 ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-            aria-label="New Chat"
-            title="New Chat"
-          >
-            New Chat
-          </button>
         </div>
 
         {messages.length > 0 && (
@@ -419,9 +420,8 @@ export default function DeepSeekChat() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`p-4 rounded-lg ${
-                  msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
-                }`}
+                className={`p-4 rounded-lg ${msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
+                  }`}
               >
                 <div className="flex items-center mb-2 gap-2">
                   {!msg.isUser && getModelIcon(msg.model)}
@@ -473,20 +473,20 @@ export default function DeepSeekChat() {
               className="absolute bottom-4 left-4 bg-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
               title="Select Model"
               aria-label="Model selection"
-            disabled={isLoading}
-          >
-            <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
-            <option value="scira">Scira Only</option>
-            <option value="deepseek">DeepSeek R1 Only</option>
-            <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
-            <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
-            <option value="gemma3:1b">Gemma3 1B</option>
-            <option value="qwen2.5vl:3b">Gemma3 4B</option>
-            <option value="llama3.2">Llama 3.2</option>
-            <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
-            <option value="phi:2.7b">Phi 2.7B</option>
-            <option value="tinyllama">TinyLlama</option>
-          </select>
+              disabled={isLoading}
+            >
+              <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
+              <option value="scira">Scira Only</option>
+              <option value="deepseek">DeepSeek R1 Only</option>
+              <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
+              <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+              <option value="gemma3:1b">Gemma3 1B</option>
+              <option value="qwen2.5vl:3b">Gemma3 4B</option>
+              <option value="llama3.2">Llama 3.2</option>
+              <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+              <option value="phi:2.7b">Phi 2.7B</option>
+              <option value="tinyllama">TinyLlama</option>
+            </select>
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
               {imagePreview ? (
                 <div className="relative">
