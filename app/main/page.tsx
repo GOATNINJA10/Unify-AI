@@ -321,15 +321,32 @@ export default function DeepSeekChat() {
       }
 
       const data = await res.json()
-      const aiResponseText = data.finalOutput || "No response"
 
-      const aiMessage: Message = {
-        id: messageIdRef.current++,
-        model: selectedModel,
-        text: aiResponseText,
-        isUser: false,
+      if (chainedMode && data.responses && Array.isArray(data.responses) && data.responses.length >= 2) {
+        // Create a combined message for chained responses
+        const combinedMessage: Message = {
+          id: messageIdRef.current++,
+          model: "chained",
+          text: "", // text will be rendered differently
+          isUser: false,
+          // Add a new property to hold both responses
+          responses: data.responses.map((resp: any) => ({
+            model: resp.model,
+            text: resp.response,
+          })),
+        } as any // Cast to any to allow extra property
+        setMessages((prev) => [...prev, combinedMessage])
+      } else {
+        const aiResponseText = data.finalOutput || "No response"
+        const aiMessage: Message = {
+          id: messageIdRef.current++,
+          model: selectedModel,
+          text: aiResponseText,
+          isUser: false,
+        }
+        setMessages((prev) => [...prev, aiMessage])
       }
-      setMessages((prev) => [...prev, aiMessage])
+
       toast({
         title: "Success",
         description: "Response received",
@@ -433,26 +450,57 @@ export default function DeepSeekChat() {
 
         {messages.length > 0 && (
           <main className="flex-1 w-full max-w-2xl overflow-y-auto mb-4 space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`p-4 rounded-lg ${msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
-                  }`}
-              >
-                <div className="flex items-center mb-2 gap-2">
-                  {!msg.isUser && getModelIcon(msg.model)}
-                  <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
-                </div>
-                <div className="prose prose-invert max-w-none whitespace-pre-wrap">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
+            {messages.map((msg) => {
+              if (msg.model === "chained" && (msg as any).responses) {
+                // Render side-by-side responses for chained messages
+                const responses = (msg as any).responses as { model: string; text: string }[]
+                return (
+                  <div
+                    key={msg.id}
+                    className="p-4 rounded-lg bg-gray-800 text-gray-300 self-start flex gap-4"
+                    style={{ maxWidth: "100%" }}
                   >
-                    {convertLatexDelimiters(msg.text)}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            ))}
+                    {responses.map((resp, index) => (
+                      <div key={index} className="flex-1 border border-gray-600 rounded p-4 overflow-auto max-h-96">
+                        <div className="flex items-center mb-2 gap-2">
+                          {getModelIcon(resp.model)}
+                          <span className="font-semibold">{getModelName(resp.model)}</span>
+                        </div>
+                        <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {convertLatexDelimiters(resp.text)}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              } else {
+                return (
+                  <div
+                    key={msg.id}
+                    className={`p-4 rounded-lg ${msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
+                      }`}
+                  >
+                    <div className="flex items-center mb-2 gap-2">
+                      {!msg.isUser && getModelIcon(msg.model)}
+                      <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
+                    </div>
+                    <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                      >
+                        {convertLatexDelimiters(msg.text)}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )
+              }
+            })}
             <div ref={messagesEndRef} />
           </main>
         )}

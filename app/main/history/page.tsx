@@ -20,6 +20,8 @@ interface Message {
   model: string
   text: string
   isUser: boolean
+  // Optional responses array for chained messages
+  responses?: { model: string; text: string }[]
 }
 
 function convertLatexDelimiters(text: string): string {
@@ -84,13 +86,52 @@ export default function ChatHistory() {
       }
       const data = await res.json()
       if (data.messages && Array.isArray(data.messages)) {
-        const historyMessages = data.messages.map((msg: any) => ({
-          id: msg.id,
-          model: msg.model || "unknown",
-          text: msg.content,
-          isUser: msg.isUser,
-        }))
-        setMessages(historyMessages)
+        // Group consecutive chained model messages
+        const groupedMessages: Message[] = []
+        let i = 0
+        while (i < data.messages.length) {
+          const msg = data.messages[i]
+          if (msg.model !== "chained" && msg.model !== "user") {
+            // Check if next message has same conversation and is also AI message with different model
+            // Group consecutive AI messages with different models as chained responses
+            const responses = [msg]
+            let j = i + 1
+            while (j < data.messages.length && data.messages[j].isUser === false) {
+              responses.push(data.messages[j])
+              j++
+            }
+            if (responses.length > 1) {
+              groupedMessages.push({
+                id: `group-${msg.id}`,
+                model: "chained",
+                text: "",
+                isUser: false,
+                responses: responses.map((r: any) => ({
+                  model: r.model,
+                  text: r.content,
+                })),
+              })
+              i = j
+            } else {
+              groupedMessages.push({
+                id: msg.id,
+                model: msg.model || "unknown",
+                text: msg.content,
+                isUser: msg.isUser,
+              })
+              i++
+            }
+          } else {
+            groupedMessages.push({
+              id: msg.id,
+              model: msg.model || "unknown",
+              text: msg.content,
+              isUser: msg.isUser,
+            })
+            i++
+          }
+        }
+        setMessages(groupedMessages)
         setConversationId(data.conversationId || null)
         // Scroll to bottom after loading messages
         setTimeout(() => {
@@ -146,7 +187,7 @@ export default function ChatHistory() {
     <TooltipProvider>
       <div className="min-h-screen bg-gray-950 flex flex-col px-4 justify-start items-center">
         <div className="absolute top-4 right-4 flex items-center space-x-4">
-          <Button onClick={() => router.push("/main/page")}>Back to Chat</Button>
+          <Button onClick={() => router.push("/main/")}>Back to Chat</Button>
           <Button onClick={() => signOut()}>Sign Out</Button>
           <Avatar>
             <AvatarFallback>{session?.user?.email?.[0].toUpperCase()}</AvatarFallback>
@@ -194,15 +235,35 @@ export default function ChatHistory() {
                       msg.isUser ? "bg-blue-700 text-white self-end" : "bg-gray-800 text-gray-300 self-start"
                     }`}
                   >
-                    <div className="flex items-center mb-2 gap-2">
-                      {!msg.isUser && getModelIcon(msg.model)}
-                      <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
-                    </div>
-                    <div className="prose prose-invert max-w-none whitespace-pre-wrap">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {convertLatexDelimiters(msg.text)}
-                      </ReactMarkdown>
-                    </div>
+                    {msg.model === "chained" && msg.responses ? (
+                      <div className="flex gap-4 max-w-full overflow-auto">
+                        {msg.responses.map((resp, index) => (
+                          <div key={index} className="flex-1 border border-gray-600 rounded p-4 overflow-auto max-h-96">
+                            <div className="flex items-center mb-2 gap-2">
+                              {getModelIcon(resp.model)}
+                              <span className="font-semibold">{getModelName(resp.model)}</span>
+                            </div>
+                            <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {convertLatexDelimiters(resp.text)}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center mb-2 gap-2">
+                          {!msg.isUser && getModelIcon(msg.model)}
+                          <span className="font-semibold">{msg.isUser ? "You" : getModelName(msg.model)}</span>
+                        </div>
+                        <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            {convertLatexDelimiters(msg.text)}
+                          </ReactMarkdown>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 <div id="messages-end" />

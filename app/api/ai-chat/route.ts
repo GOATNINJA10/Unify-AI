@@ -187,7 +187,7 @@ async function callSciraAPI(prompt: string): Promise<string> {
       '--disable-setuid-sandbox',
       '--disable-accelerated-2d-canvas',
       '--no-zygote',
-      '--single-process',
+      // Removed '--single-process' flag for macOS stability
       '--disable-web-security'
     ]
   };
@@ -197,14 +197,23 @@ async function callSciraAPI(prompt: string): Promise<string> {
     launchOptions.executablePath = braveExecutablePath;
   }
 
-  const browser = await chromium.launch(launchOptions);
+  let browser;
+  let context;
+  let page;
 
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 1024 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-  })
+  try {
+    browser = await chromium.launch(launchOptions);
 
-  const page = await context.newPage()
+    context = await browser.newContext({
+      viewport: { width: 1280, height: 1024 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    });
+
+    page = await context.newPage();
+  } catch (error) {
+    console.error("Error launching browser or creating context/page:", error);
+    throw error;
+  }
 
   try {
     // Set navigation timeout
@@ -742,14 +751,28 @@ export async function POST(request: NextRequest) {
 
     // Store AI response message if conversation exists
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          content: result.finalOutput || result,
-          isUser: false,
-          conversationId: conversation.id,
-          model,
-        },
-      })
+      if (model === "chained" && result.responses && Array.isArray(result.responses)) {
+        // Store each model's response separately
+        for (const resp of result.responses) {
+          await prisma.message.create({
+            data: {
+              content: resp.response,
+              isUser: false,
+              conversationId: conversation.id,
+              model: resp.model,
+            },
+          })
+        }
+      } else {
+        await prisma.message.create({
+          data: {
+            content: result.finalOutput || result,
+            isUser: false,
+            conversationId: conversation.id,
+            model,
+          },
+        })
+      }
 
       // Re-fetch conversation messages after storing new messages
       conversation = await prisma.conversation.findUnique({
