@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Paperclip, ArrowUp, Zap, Globe, Repeat, Mic, ImageIcon, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Toggle } from "@/components/ui/toggle"
 
 interface Message {
   id: number
@@ -50,7 +51,10 @@ export default function DeepSeekChat() {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "chained" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("chained")
+  const [selectedModel, setSelectedModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("scira")
+  const [firstModel, setFirstModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("scira")
+  const [secondModel, setSecondModel] = useState<"scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b" | "tinyllama">("deepseek")
+  const [chainedMode, setChainedMode] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState(false)
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
   const [isCheckingHealth, setIsCheckingHealth] = useState(true)
@@ -61,6 +65,9 @@ export default function DeepSeekChat() {
 
   // New state for conversationId to track chat history
   const [conversationId, setConversationId] = useState<string | null>(null)
+
+  // New state for context mode toggle
+  const [contextMode, setContextMode] = useState<boolean>(false)
 
   // Function to fetch chat history from backend
   const fetchChatHistory = async (convId?: string | null) => {
@@ -286,10 +293,19 @@ export default function DeepSeekChat() {
     setImagePreview(null)
 
     try {
+      const bodyPayload: any = { userEmail: session?.user?.email, query: input, image: imageData, conversationId, contextMode }
+      if (chainedMode) {
+        bodyPayload.firstModel = firstModel
+        bodyPayload.secondModel = secondModel
+        bodyPayload.model = "chained"
+      } else {
+        bodyPayload.model = selectedModel
+      }
+
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userEmail: session?.user?.email, query: input, model: selectedModel, image: imageData, conversationId }),
+        body: JSON.stringify(bodyPayload),
       })
 
       if (!res.ok) {
@@ -467,7 +483,7 @@ export default function DeepSeekChat() {
                 target.style.overflowY = newHeight >= 200 ? 'auto' : 'hidden'
               }}
             />
-             <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
+            <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
               {/* First Model Dropdown */}
               <div className="flex flex-col">
                 <label htmlFor="first-model-select" className="text-xs text-gray-400">First Model</label>
@@ -500,9 +516,8 @@ export default function DeepSeekChat() {
                   id="second-model-select"
                   value={secondModel}
                   onChange={(e) => setSecondModel(e.target.value as typeof secondModel)}
-                  className={`bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer transition-opacity ${
-                    chainedMode ? "opacity-100" : "opacity-50"
-                  }`}
+                  className={`bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer transition-opacity ${chainedMode ? "opacity-100" : "opacity-50"
+                    }`}
                   title="Select Second Model"
                   aria-label="Second model selection"
                   disabled={!chainedMode || isLoading}
@@ -535,27 +550,6 @@ export default function DeepSeekChat() {
               </div>
             </div>
 
-=======
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value as "chained" | "scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b")}
-              className="absolute bottom-4 left-4 bg-gray-700 text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
-              title="Select Model"
-              aria-label="Model selection"
-              disabled={isLoading}
-            >
-              <option value="chained">Chained Processing (Scira → DeepSeek R1)</option>
-              <option value="scira">Scira Only</option>
-              <option value="deepseek">DeepSeek R1 Only</option>
-              <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Instruct Turbo</option>
-              <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
-              <option value="gemma3:1b">Gemma3 1B</option>
-              <option value="qwen2.5vl:3b">Gemma3 4B</option>
-              <option value="llama3.2">Llama 3.2</option>
-              <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
-              <option value="phi:2.7b">Phi 2.7B</option>
-              <option value="tinyllama">TinyLlama</option>
-            </select>
             <div className="absolute bottom-4 right-4 flex items-center space-x-2">
               {imagePreview ? (
                 <div className="relative">
