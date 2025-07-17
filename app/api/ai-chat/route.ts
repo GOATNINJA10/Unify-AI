@@ -56,7 +56,7 @@ async function callDeepSeekR1API(prompt: string): Promise<string> {
 
     const model = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free";
     const apiUrl = "https://api.together.xyz/v1/chat/completions";
-    
+
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -96,14 +96,14 @@ async function callDeepSeekR1API(prompt: string): Promise<string> {
     }
 
     const result = await response.json();
-    
+
     // Handle Together AI's response format
     if (result.choices && result.choices.length > 0 && result.choices[0].message) {
       let completion = result.choices[0].message.content;
-      
+
       // Remove content between <think> tags
       completion = completion.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      
+
       console.log("✅ Together AI DeepSeek R1 response received");
       return completion;
     } else {
@@ -117,6 +117,55 @@ async function callDeepSeekR1API(prompt: string): Promise<string> {
   }
 }
 
+// Function to find Brave executable path dynamically
+function findBraveExecutablePath(): string | undefined {
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+
+  const platform = os.platform();
+  const possiblePaths: string[] = [];
+
+  if (platform === 'win32') {
+    // Windows paths
+    possiblePaths.push(
+      "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      path.join(os.homedir(), "AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe")
+    );
+  } else if (platform === 'darwin') {
+    // macOS paths
+    possiblePaths.push(
+      "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      path.join(os.homedir(), "Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
+    );
+  } else {
+    // Linux paths
+    possiblePaths.push(
+      "/usr/bin/brave-browser",
+      "/usr/bin/brave",
+      "/snap/bin/brave",
+      "/opt/brave.com/brave/brave-browser",
+      path.join(os.homedir(), ".local/bin/brave-browser")
+    );
+  }
+
+  // Check each path and return the first one that exists
+  for (const execPath of possiblePaths) {
+    try {
+      if (fs.existsSync(execPath)) {
+        console.log("Found Brave executable at:", execPath);
+        return execPath;
+      }
+    } catch (error) {
+      // Continue checking other paths
+    }
+  }
+
+  console.warn("Brave executable not found in common locations. Using default Chromium.");
+  return undefined; // Will use default Chromium
+}
+
 // Scira API integration (real implementation) using Playwright
 async function callSciraAPI(prompt: string): Promise<string> {
   console.log("Calling Scira API with prompt length:", prompt.length)
@@ -125,10 +174,12 @@ async function callSciraAPI(prompt: string): Promise<string> {
     throw new Error("Prompt must be a non-empty string")
   }
 
+  // Get dynamic Brave executable path
+  const braveExecutablePath = findBraveExecutablePath();
+
   // Launch browser with optimizations
-  const browser = await chromium.launch({
+  const launchOptions: any = {
     headless: true,
-    executablePath: "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
     args: [
       '--disable-gpu',
       '--disable-dev-shm-usage',
@@ -139,32 +190,39 @@ async function callSciraAPI(prompt: string): Promise<string> {
       '--single-process',
       '--disable-web-security'
     ]
-  })
-  
+  };
+
+  // Add executable path if Brave is found
+  if (braveExecutablePath) {
+    launchOptions.executablePath = braveExecutablePath;
+  }
+
+  const browser = await chromium.launch(launchOptions);
+
   const context = await browser.newContext({
     viewport: { width: 1280, height: 1024 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
   })
-  
+
   const page = await context.newPage()
-  
+
   try {
     // Set navigation timeout
     page.setDefaultNavigationTimeout(30000)
-    
+
     // Navigate to the page with optimizations
-    await page.goto("https://scira.ai", { 
+    await page.goto("https://scira.ai", {
       waitUntil: 'domcontentloaded',
-      timeout: 30000 
+      timeout: 30000
     })
 
     // Wait for the textarea to be visible and ready
     const textareaSelector = 'textarea'
-    await page.waitForSelector(textareaSelector, { 
+    await page.waitForSelector(textareaSelector, {
       state: 'visible',
-      timeout: 10000 
+      timeout: 10000
     })
-    
+
     // Fill the textarea and submit
     await page.fill(textareaSelector, prompt)
     await new Promise(r => setTimeout(r, 100)) // Small delay before pressing enter
@@ -172,11 +230,11 @@ async function callSciraAPI(prompt: string): Promise<string> {
 
     // Selector for the generated response block
     const responseSelector = ".mt-3.markdown-body.prose.prose-neutral.dark\\:prose-invert.max-w-none.dark\\:text-neutral-200.font-sans"
-    
+
     // Wait for the response container to appear
-    await page.waitForSelector(responseSelector, { 
+    await page.waitForSelector(responseSelector, {
       state: 'attached',
-      timeout: 10000 
+      timeout: 10000
     })
 
     let lastText = ""
@@ -213,7 +271,7 @@ async function callSciraAPI(prompt: string): Promise<string> {
 
       await new Promise((r) => setTimeout(r, pollInterval))
     }
-    
+
     // If we get here, we timed out
     console.warn(`⚠️ Scira API timed out after ${maxWaitTime / 1000}s. Returning partial response.`)
     const partialResponse = lastText || "⚠️ No complete response received within the time limit."
@@ -254,10 +312,10 @@ async function processChainedRequest(query: string) {
     // Step 2: Use Scira output as input for DeepSeek R1 with enhanced prompting
     console.log("Step 2: Processing with DeepSeek R1 via Together AI")
     const deepseekStart = Date.now()
-    
+
     // Enhanced prompt for Together AI's DeepSeek R1
     const systemPrompt = `You are DeepSeek R1, an advanced AI assistant. Your task is to refine the following response in a clear, concise manner.`
-    
+
     const chainedPrompt = `## Original User Query
 ${query}
 
