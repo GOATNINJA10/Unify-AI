@@ -309,6 +309,17 @@ async function processChainedRequest(query: string) {
       processingTime: sciraTime,
     })
 
+    // Step 2: Use firstModel output as input for secondModel with enhanced prompting
+    console.log(`Step 2: Processing with ${secondModel} via chaining`)
+    const secondStart = Date.now()
+
+    let secondResponse: string
+    if (secondModel === "scira") {
+      secondResponse = await callSciraAPI(firstResponse)
+    } else if (secondModel === "deepseek") {
+      // Enhanced prompt for DeepSeek R1
+      const chainedPrompt = `## Original User Query
+=======
     // Step 2: Use Scira output as input for DeepSeek R1 with enhanced prompting
     console.log("Step 2: Processing with DeepSeek R1 via Together AI")
     const deepseekStart = Date.now()
@@ -317,6 +328,7 @@ async function processChainedRequest(query: string) {
     const systemPrompt = `You are DeepSeek R1, an advanced AI assistant. Your task is to refine the following response in a clear, concise manner.`
 
     const chainedPrompt = `## Original User Query
+   
 ${query}
 
 ## Initial Response from Scira
