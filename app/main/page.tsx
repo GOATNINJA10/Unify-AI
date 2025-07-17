@@ -467,6 +467,75 @@ export default function DeepSeekChat() {
                 target.style.overflowY = newHeight >= 200 ? 'auto' : 'hidden'
               }}
             />
+             <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-80 rounded-md px-3 py-1 shadow-md z-10">
+              {/* First Model Dropdown */}
+              <div className="flex flex-col">
+                <label htmlFor="first-model-select" className="text-xs text-gray-400">First Model</label>
+                <select
+                  id="first-model-select"
+                  value={firstModel}
+                  onChange={(e) => setFirstModel(e.target.value as typeof firstModel)}
+                  className="bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer"
+                  title="Select First Model"
+                  aria-label="First model selection"
+                  disabled={isLoading}
+                >
+                  <option value="scira">Scira</option>
+                  <option value="deepseek">DeepSeek R1</option>
+                  <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Turbo</option>
+                  <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+                  <option value="gemma3:1b">Gemma3 1B</option>
+                  <option value="qwen2.5vl:3b">Gemma3 4B</option>
+                  <option value="llama3.2">Llama 3.2</option>
+                  <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+                  <option value="phi:2.7b">Phi 2.7B</option>
+                  <option value="tinyllama">TinyLlama</option>
+                </select>
+              </div>
+
+              {/* Second Model Dropdown (disabled if not in chained mode) */}
+              <div className="flex flex-col">
+                <label htmlFor="second-model-select" className="text-xs text-gray-400">Second Model</label>
+                <select
+                  id="second-model-select"
+                  value={secondModel}
+                  onChange={(e) => setSecondModel(e.target.value as typeof secondModel)}
+                  className={`bg-transparent text-gray-300 text-xs rounded-md px-2 py-1 cursor-pointer transition-opacity ${
+                    chainedMode ? "opacity-100" : "opacity-50"
+                  }`}
+                  title="Select Second Model"
+                  aria-label="Second model selection"
+                  disabled={!chainedMode || isLoading}
+                >
+                  <option value="scira">Scira</option>
+                  <option value="deepseek">DeepSeek R1</option>
+                  <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free">Llama 3.3 70B Turbo</option>
+                  <option value="meta-llama/Llama-Vision-Free">Llama Vision</option>
+                  <option value="gemma3:1b">Gemma3 1B</option>
+                  <option value="qwen2.5vl:3b">Gemma3 4B</option>
+                  <option value="llama3.2">Llama 3.2</option>
+                  <option value="qwen2.5-coder:0.5b">Qwen 2.5 Coder</option>
+                  <option value="phi:2.7b">Phi 2.7B</option>
+                  <option value="tinyllama">TinyLlama</option>
+                </select>
+              </div>
+
+              {/* Context Mode Toggle */}
+              <div className="flex items-center space-x-2 text-gray-300">
+                <label htmlFor="context-mode-toggle" className="text-sm select-none cursor-pointer">
+                  Context Mode
+                </label>
+                <Toggle
+                  id="context-mode-toggle"
+                  pressed={contextMode}
+                  onPressedChange={setContextMode}
+                  disabled={isLoading}
+                  aria-label="Toggle context mode"
+                />
+              </div>
+            </div>
+
+=======
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value as "chained" | "scira" | "deepseek" | "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" | "meta-llama/Llama-Vision-Free" | "gemma3:1b" | "qwen2.5vl:3b" | "llama3.2" | "qwen2.5-coder:0.5b" | "phi:2.7b")}
